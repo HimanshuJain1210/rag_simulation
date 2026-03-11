@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Simulator — Learn by Doing</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Bricolage+Grotesque:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ─── RESET & ROOT ─────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg:       #05080d;
+  --panel:    #0b1118;
+  --border:   #1a2535;
+  --border2:  #243040;
+
+  --blue:     #3b82f6;
+  --cyan:     #06b6d4;
+  --amber:    #f59e0b;
+  --green:    #10b981;
+  --red:      #ef4444;
+  --violet:   #8b5cf6;
+
+  --text:     #cbd5e1;
+  --muted:    #475569;
+  --dim:      #1e2d3d;
+
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Bricolage Grotesque', sans-serif;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* grid bg */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(59,130,246,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59,130,246,0.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* glow orbs */
+body::after {
+  content: '';
+  position: fixed;
+  top: -200px; left: -200px;
+  width: 700px; height: 700px;
+  background: radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%);
+  pointer-events: none; z-index: 0;
+}
+
+/* ─── LAYOUT ────────────────────────────────────────── */
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 20px 80px;
+  position: relative; z-index: 1;
+}
+
+/* ─── HERO ──────────────────────────────────────────── */
+.hero {
+  padding: 60px 0 40px;
+  text-align: center;
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  background: rgba(6,182,212,.08);
+  border: 1px solid rgba(6,182,212,.2);
+  padding: 5px 14px;
+  border-radius: 20px;
+  margin-bottom: 22px;
+}
+
+.hero-eyebrow::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(.7); }
+}
+
+h1 {
+  font-family: var(--display);
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  color: #fff;
+  margin-bottom: 14px;
+  letter-spacing: -.02em;
+}
+
+h1 em {
+  font-style: normal;
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero p {
+  color: var(--muted);
+  max-width: 520px;
+  margin: 0 auto 32px;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/* pipeline legend */
+.legend {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+}
+
+.leg-item {
+  padding: 6px 18px;
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  transition: all .3s;
+}
+
+.leg-item.r { color: var(--blue); }
+.leg-item.a { color: var(--amber); }
+.leg-item.g { color: var(--green); }
+.leg-item.r.on { background: rgba(59,130,246,.15); }
+.leg-item.a.on { background: rgba(245,158,11,.15); }
+.leg-item.g.on { background: rgba(16,185,129,.15); }
+
+/* ─── SECTION WRAPPER ───────────────────────────────── */
+.section {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 16px;
+  transition: border-color .4s;
+}
+
+.section.phase-r { border-left: 3px solid var(--blue); }
+.section.phase-a { border-left: 3px solid var(--amber); }
+.section.phase-g { border-left: 3px solid var(--green); }
+
+.section.dim { opacity: .45; }
+.section.active { border-color: var(--border2); opacity: 1; }
+.section.done { opacity: 1; }
+
+.sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sec-title {
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: .1em;
+}
+
+.badge-r { background: rgba(59,130,246,.12); color: var(--blue); border: 1px solid rgba(59,130,246,.25); }
+.badge-a { background: rgba(245,158,11,.12); color: var(--amber); border: 1px solid rgba(245,158,11,.25); }
+.badge-g { background: rgba(16,185,129,.12); color: var(--green); border: 1px solid rgba(16,185,129,.25); }
+
+.sec-desc {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 18px;
+  line-height: 1.7;
+}
+
+/* ─── STEP 0: QUERY INPUT ───────────────────────────── */
+.query-box {
+  background: var(--bg);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  padding: 0;
+  display: flex;
+  overflow: hidden;
+  transition: border-color .3s, box-shadow .3s;
+}
+
+.query-box:focus-within {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.12), 0 0 20px rgba(59,130,246,.15);
+}
+
+.query-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 14px 18px;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 14px;
+  outline: none;
+}
+
+.query-box input::placeholder { color: var(--muted); }
+
+.run-btn {
+  background: var(--blue);
+  border: none;
+  padding: 14px 22px;
+  color: #fff;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .2s, transform .15s;
+  white-space: nowrap;
+}
+
+.run-btn:hover { background: #2563eb; }
+.run-btn:active { transform: scale(.97); }
+.run-btn:disabled { background: var(--muted); cursor: not-allowed; }
+
+/* ─── DOCUMENT SOURCES ──────────────────────────────── */
+.doc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.doc-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px 14px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  transition: all .4s;
+  position: relative;
+  overflow: hidden;
+}
+
+.doc-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--blue);
+  transform: scaleX(0);
+  transition: transform .4s;
+}
+
+.doc-card.active::before { transform: scaleX(1); }
+
+.doc-id {
+  font-size: 9px;
+  letter-spacing: .12em;
+  color: var(--blue);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.doc-card.matched {
+  border-color: rgba(59,130,246,.4);
+  background: rgba(59,130,246,.06);
+  color: var(--text);
+}
+
+.doc-card.top-match {
+  border-color: var(--cyan);
+  background: rgba(6,182,212,.07);
+  box-shadow: 0 0 16px rgba(6,182,212,.15);
+}
+
+.doc-card.top-match .doc-id { color: var(--cyan); }
+
+.score-pill {
+  font-size: 9px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: rgba(6,182,212,.15);
+  color: var(--cyan);
+}
+
+/* ─── VECTOR CANVAS ─────────────────────────────────── */
+.canvas-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg);
+  height: 240px;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-legend {
+  position: absolute;
+  bottom: 10px; right: 12px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+
+.cl-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: var(--muted);
+}
+
+.cl-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+
+/* ─── SIMILARITY BARS ───────────────────────────────── */
+.sim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sim-row {
+  display: grid;
+  grid-template-columns: 100px 1fr 48px;
+  align-items: center;
+  gap: 10px;
+}
+
+.sim-label {
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sim-bar-bg {
+  height: 6px;
+  background: var(--dim);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sim-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  width: 0;
+  transition: width 1s ease;
+}
+
+.sim-val {
+  font-size: 10px;
+  text-align: right;
+  color: var(--muted);
+}
+
+/* ─── PROMPT BUILDER ─────────────────────────────────── */
+.prompt-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  font-size: 12px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  min-height: 120px;
+}
+
+.prompt-system { color: var(--muted); }
+.prompt-context { color: var(--amber); }
+.prompt-query { color: #fff; }
+.prompt-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-weight: 700;
+  opacity: .6;
+}
+
+/* ─── GENERATION ─────────────────────────────────────── */
+.gen-answer {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  font-size: 13.5px;
+  line-height: 1.9;
+  color: #e2e8f0;
+  min-height: 80px;
+  white-space: pre-wrap;
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 2px; height: 14px;
+  background: var(--green);
+  animation: blink 1s step-end infinite;
+  vertical-align: middle;
+  margin-left: 1px;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ─── STEP COUNTER TRACKER ───────────────────────────── */
+.pipeline-tracker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 32px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.pt-step {
+  display: flex;
+  align-items: center;
+}
+
+.pt-dot {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel);
+  transition: all .4s;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.pt-dot.active { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 4px rgba(59,130,246,.12); }
+.pt-dot.done { border-color: var(--green); background: var(--green); color: #000; }
+
+.pt-line {
+  width: 40px; height: 2px;
+  background: var(--border2);
+  transition: background .4s;
+  flex-shrink: 0;
+}
+
+.pt-line.done { background: var(--green); }
+
+.pt-label {
+  position: absolute;
+  top: 38px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ─── STATUS LOG ─────────────────────────────────────── */
+.log-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.9;
+  margin-top: 14px;
+}
+
+.log-box .log-line { display: block; animation: logIn .3s ease; }
+@keyframes logIn { from { opacity:0; transform: translateX(-8px); } to { opacity:1; transform: none; } }
+
+.log-ts { color: var(--muted); margin-right: 8px; }
+.log-ok { color: var(--green); }
+.log-info { color: var(--blue); }
+.log-warn { color: var(--amber); }
+
+/* ─── MISC ───────────────────────────────────────────── */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.label-sm {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.label-sm::before {
+  content: '//';
+  color: var(--border2);
+}
+
+.highlight-box {
+  background: rgba(245,158,11,.06);
+  border: 1px solid rgba(245,158,11,.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--amber);
+  margin-top: 12px;
+}
+
+.chunk-token {
+  display: inline-block;
+  background: rgba(6,182,212,.1);
+  border: 1px solid rgba(6,182,212,.25);
+  color: var(--cyan);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  margin: 2px;
+  transition: all .3s;
+}
+
+.chunk-token.lit {
+  background: rgba(6,182,212,.25);
+  box-shadow: 0 0 8px rgba(6,182,212,.3);
+}
+
+.vector-row {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.vec-cell {
+  width: 28px; height: 28px;
+  border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px;
+  font-weight: 600;
+  transition: all .5s;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .two-col { grid-template-columns: 1fr; }
+  .sim-row { grid-template-columns: 80px 1fr 40px; }
+  .pt-line { width: 20px; }
+}
+
+/* ─── FOOTER ────────────────────────────────────────── */
+.footer {
+  text-align: center;
+  padding-top: 32px;
+  font-size: 11px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-eyebrow">Interactive Learning Tool</div>
+    <h1>Understand <em>RAG</em><br>Step by Step</h1>
+    <p>Type any query, watch how documents are chunked, embedded, retrieved, and used to generate a grounded answer — live.</p>
+    <div class="legend">
+      <div class="leg-item r" id="leg-r">R · Retrieval</div>
+      <div class="leg-item a" id="leg-a">A · Augment</div>
+      <div class="leg-item g" id="leg-g">G · Generate</div>
+    </div>
+  </div>
+
+  <!-- TRACKER -->
+  <div class="pipeline-tracker" id="tracker">
+    <!-- built by JS -->
+  </div>
+
+  <!-- ── STEP 0: QUERY ── -->
+  <div class="section" id="sec-query">
+    <div class="sec-head">
+      <div class="sec-title">
+        🔍 Your Query
+        <span class="step-badge badge-r">Entry Point</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      Everything in RAG starts with a user question. Type something below — the pipeline will show you exactly what happens next.
+    </div>
+    <div class="query-box">
+      <input type="text" id="queryInput" placeholder="e.g. What is deep learning?" value="What is machine learning?" />
+      <button class="run-btn" id="runBtn" onclick="startRAG()">▶ Run Pipeline</button>
+    </div>
+    <div class="log-box" id="logBox">
+      <span class="log-line"><span class="log-ts">00:00</span> <span class="log-info">// Ready — enter a query and click Run Pipeline</span></span>
+    </div>
+  </div>
+
+  <!-- ── STEP 1: CHUNKING ── -->
+  <div class="section phase-r dim" id="sec-chunk">
+    <div class="sec-head">
+      <div class="sec-title">
+        📄 Step 1 — Document Chunking
+        <span class="step-badge badge-r">Retrieval</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      Raw documents are split into smaller, overlapping <strong style="color:#fff">chunks</strong>. Each chunk is small enough to fit in an LLM context window but large enough to be semantically meaningful.
+    </div>
+    <div class="doc-grid" id="chunksGrid"></div>
+    <div class="highlight-box" id="chunkNote" style="display:none">
+      💡 <strong>Why chunk?</strong> LLMs have token limits. Chunking lets you index thousands of pages and only pull the relevant slice.
+    </div>
+  </div>
+
+  <!-- ── STEP 2: EMBEDDING ── -->
+  <div class="section phase-r dim" id="sec-embed">
+    <div class="sec-head">
+      <div class="sec-title">
+        🔢 Step 2 — Vector Embedding
+        <span class="step-badge badge-r">Retrieval</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      Each chunk is passed through an <strong style="color:#fff">embedding model</strong> (e.g. text-embedding-ada-002). It converts text into a list of numbers — a <em>vector</em> — that captures semantic meaning.
+    </div>
+    <div class="two-col">
+      <div>
+        <div class="label-sm">Sample chunk → tokens</div>
+        <div id="tokenViz" style="min-height:40px;"></div>
+      </div>
+      <div>
+        <div class="label-sm">Resulting embedding vector (first 32 dims)</div>
+        <div class="vector-row" id="vecViz"></div>
+      </div>
+    </div>
+    <div class="highlight-box" style="margin-top:14px; display:none" id="embedNote">
+      💡 Vectors encode <em>meaning</em>, not just keywords. "Car" and "Automobile" land near each other in vector space.
+    </div>
+  </div>
+
+  <!-- ── STEP 3: VECTOR DB ── -->
+  <div class="section phase-r dim" id="sec-vdb">
+    <div class="sec-head">
+      <div class="sec-title">
+        🗄️ Step 3 — Vector Database
+        <span class="step-badge badge-r">Retrieval</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      All chunk vectors are stored in a <strong style="color:#fff">Vector DB</strong> (e.g. Pinecone, Weaviate, FAISS). This enables lightning-fast nearest-neighbour search at scale.
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="vectorCanvas"></canvas>
+      <div class="canvas-legend">
+        <div class="cl-item"><div class="cl-dot" style="background:var(--blue)"></div>Chunk vectors</div>
+        <div class="cl-item"><div class="cl-dot" style="background:var(--amber)"></div>Your query</div>
+        <div class="cl-item"><div class="cl-dot" style="background:var(--cyan)"></div>Top matches</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: SIMILARITY SEARCH ── -->
+  <div class="section phase-r dim" id="sec-search">
+    <div class="sec-head">
+      <div class="sec-title">
+        📡 Step 4 — Similarity Search
+        <span class="step-badge badge-r">Retrieval</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      Your query is also embedded. Its vector is compared against all stored vectors using <strong style="color:#fff">cosine similarity</strong>. The top-K most similar chunks are retrieved.
+    </div>
+    <div class="label-sm">Similarity scores — all chunks</div>
+    <div class="sim-list" id="simList"></div>
+  </div>
+
+  <!-- ── STEP 5: AUGMENTATION ── -->
+  <div class="section phase-a dim" id="sec-aug">
+    <div class="sec-head">
+      <div class="sec-title">
+        🧩 Step 5 — Prompt Augmentation
+        <span class="step-badge badge-a">Augment</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      The retrieved chunks are <strong style="color:#fff">injected into the prompt</strong> as context. The LLM now has both your question <em>and</em> the relevant knowledge — no fine-tuning needed.
+    </div>
+    <div class="label-sm">Augmented prompt sent to LLM</div>
+    <div class="prompt-box" id="promptBox"><span style="color:var(--muted)">// waiting for retrieval...</span></div>
+    <div class="highlight-box" id="augNote" style="display:none">
+      💡 This is the "A" in RAG. The model isn't memorising your data — it's reading it fresh every time, like an open-book exam.
+    </div>
+  </div>
+
+  <!-- ── STEP 6: GENERATION ── -->
+  <div class="section phase-g dim" id="sec-gen">
+    <div class="sec-head">
+      <div class="sec-title">
+        ✨ Step 6 — LLM Generation
+        <span class="step-badge badge-g">Generate</span>
+      </div>
+    </div>
+    <div class="sec-desc">
+      The LLM reads the augmented prompt and <strong style="color:#fff">generates a grounded answer</strong>, citing only what's in the provided context — reducing hallucination.
+    </div>
+    <div class="label-sm">Final answer</div>
+    <div class="gen-answer" id="genAnswer"><span style="color:var(--muted)">// waiting for pipeline to run...</span></div>
+    <div class="highlight-box" style="background:rgba(16,185,129,.06);border-color:rgba(16,185,129,.2);color:var(--green); display:none" id="genNote">
+      ✅ RAG complete! The answer is grounded in your documents — not hallucinated from the model's training weights.
+    </div>
+  </div>
+
+  <div class="footer">RAG Simulator · Built for learning · All steps simulated client-side</div>
+
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────
+   KNOWLEDGE BASE
+───────────────────────────────────────────────────── */
+const KB = [
+  { id:"DOC-01", text:"Machine learning is a subset of AI where algorithms learn from data to make predictions or decisions without being explicitly programmed for each task." },
+  { id:"DOC-02", text:"Deep learning uses multi-layer neural networks to automatically learn hierarchical representations from raw data like images, audio, or text." },
+  { id:"DOC-03", text:"A neural network consists of layers of interconnected nodes (neurons) that pass signals through weighted connections, inspired by the human brain." },
+  { id:"DOC-04", text:"Supervised learning trains models on labeled input-output pairs so the model learns to map inputs to correct outputs." },
+  { id:"DOC-05", text:"Unsupervised learning discovers hidden patterns or structures in data without any labeled responses." },
+  { id:"DOC-06", text:"A vector database stores high-dimensional embeddings and enables fast approximate nearest-neighbour (ANN) search for semantic retrieval." },
+  { id:"DOC-07", text:"Cosine similarity measures the cosine of the angle between two vectors — a score of 1 means identical direction, 0 means unrelated." },
+  { id:"DOC-08", text:"Transformers use self-attention mechanisms to process all tokens in parallel, enabling capture of long-range dependencies in text." },
+  { id:"DOC-09", text:"Transfer learning reuses a pre-trained model on a new task, leveraging knowledge gained on large datasets like ImageNet or Common Crawl." },
+  { id:"DOC-10", text:"Overfitting happens when a model memorises training data too closely and fails to generalise to unseen examples." },
+  { id:"DOC-11", text:"RAG (Retrieval-Augmented Generation) combines a retrieval system with a language model so the LLM can answer using your own documents." },
+  { id:"DOC-12", text:"Embeddings are dense numerical vectors that represent the semantic meaning of text — similar sentences cluster near each other in vector space." },
+];
+
+/* Pre-computed 2-D positions for visual (normalised 0–1) */
+const POS = [
+  [.18,.60],[.58,.20],[.52,.28],[.22,.52],[.26,.44],
+  [.78,.62],[.72,.68],[.55,.32],[.46,.38],[.30,.75],
+  [.14,.70],[.65,.55],
+];
+
+/* Simulated similarity based on keyword overlap */
+function simScore(query, text) {
+  const q = query.toLowerCase().replace(/[^a-z ]/g,'').split(' ').filter(w=>w.length>3);
+  const t = text.toLowerCase();
+  let hits = 0;
+  q.forEach(w => { if(t.includes(w)) hits += 2; });
+  const base = .28 + Math.sin(text.length * .03) * .08;
+  return Math.min(.97, base + hits * .11 + Math.random()*.04);
+}
+
+/* Canned answers */
+function getAnswer(query) {
+  const q = query.toLowerCase();
+  if (q.includes('machine learning') || q.includes(' ml '))
+    return `Machine learning is a branch of Artificial Intelligence where systems learn from data rather than being explicitly programmed.\n\nBased on the retrieved documents, there are three main paradigms:\n\n• Supervised learning — models trained on labeled data to predict outputs.\n• Unsupervised learning — finding patterns in unlabeled data.\n• Deep learning — using layered neural networks for complex representations.\n\nMachine learning is the backbone behind recommendation systems, speech recognition, image classification, and much more.`;
+  if (q.includes('deep learning'))
+    return `Deep learning is a specialised form of machine learning that uses neural networks with many layers — hence "deep".\n\nAccording to the knowledge base:\n\n• Networks learn hierarchical features (edges → shapes → objects in vision).\n• Transformers, a key deep learning architecture, power today's LLMs.\n• Pre-training on massive corpora then fine-tuning enables transfer learning.\n\nDeep learning has revolutionised computer vision, NLP, and speech synthesis.`;
+  if (q.includes('rag') || q.includes('retrieval'))
+    return `RAG stands for Retrieval-Augmented Generation.\n\nFrom the documents:\n\n1. RETRIEVE — embed your docs, store in a vector DB, find the most relevant chunks at query time.\n2. AUGMENT — inject those chunks into the LLM prompt as context.\n3. GENERATE — the LLM writes an answer grounded in your data.\n\nRAG reduces hallucination and keeps answers up-to-date without retraining the model.`;
+  if (q.includes('vector') || q.includes('embed'))
+    return `Embeddings convert text into dense numerical vectors that capture semantic meaning.\n\nFrom the retrieved context:\n\n• Similar sentences land close together in high-dimensional vector space.\n• Vector databases like FAISS or Pinecone store and search millions of vectors in milliseconds.\n• Cosine similarity (angle between vectors) is the standard distance metric.\n\nEmbeddings are the engine that makes semantic search — and RAG — possible.`;
+  return `Based on the most relevant chunks retrieved from the knowledge base:\n\n${query.charAt(0).toUpperCase()+query.slice(1)} relates to several core ML/AI concepts. The retrieved documents show connections to neural network architectures, training paradigms, and vector-based representations.\n\nThe retrieval system found chunks that collectively provide context on this topic. For deeper understanding, consider exploring the specific sub-topics shown in the similarity scores above.`;
+}
+
+/* ─────────────────────────────────────────────────────
+   STATE
+───────────────────────────────────────────────────── */
+let scores = [];
+let topIdx = [];
+let running = false;
+const steps = ['query','chunk','embed','vdb','search','aug','gen'];
+const stepLabels = ['Query','Chunk','Embed','Vector DB','Search','Augment','Generate'];
+
+/* ─────────────────────────────────────────────────────
+   INIT
+───────────────────────────────────────────────────── */
+window.onload = function() {
+  buildTracker();
+  buildChunks();
+  buildSimList();
+  drawCanvas([], null);
+};
+
+function buildTracker() {
+  const t = document.getElementById('tracker');
+  t.innerHTML = '';
+  steps.forEach((s,i) => {
+    const div = document.createElement('div');
+    div.className = 'pt-step';
+    div.innerHTML = `<div class="pt-dot" id="pt-${s}">${i+1}<span class="pt-label">${stepLabels[i]}</span></div>`;
+    t.appendChild(div);
+    if(i < steps.length-1) {
+      const line = document.createElement('div');
+      line.className = 'pt-line'; line.id = `ptl-${i}`;
+      t.appendChild(line);
+    }
+  });
+}
+
+function buildChunks() {
+  const g = document.getElementById('chunksGrid');
+  g.innerHTML = '';
+  KB.forEach((chunk,i) => {
+    const d = document.createElement('div');
+    d.className = 'doc-card';
+    d.id = `chunk-${i}`;
+    d.innerHTML = `<div class="doc-id">${chunk.id} <span style="font-size:9px;color:var(--muted)">${chunk.text.split(' ').length}w</span></div>${chunk.text}`;
+    g.appendChild(d);
+  });
+}
+
+function buildSimList() {
+  const el = document.getElementById('simList');
+  el.innerHTML = '';
+  KB.forEach((chunk,i) => {
+    const row = document.createElement('div');
+    row.className = 'sim-row';
+    row.innerHTML = `
+      <div class="sim-label" title="${chunk.text}">${chunk.id}</div>
+      <div class="sim-bar-bg"><div class="sim-bar-fill" id="bar-${i}" style="background:var(--blue)"></div></div>
+      <div class="sim-val" id="bval-${i}">—</div>`;
+    el.appendChild(row);
+  });
+}
+
+/* ─────────────────────────────────────────────────────
+   PIPELINE RUNNER
+───────────────────────────────────────────────────── */
+async function startRAG() {
+  if(running) return;
+  running = true;
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running...';
+
+  const query = document.getElementById('queryInput').value.trim() || 'What is machine learning?';
+  clearLog();
+  resetAll();
+
+  await delay(200);
+
+  // ── Phase indicators
+  await activateLeg('r');
+
+  // ── STEP 1: Chunking
+  markStep('query','done'); markStep('chunk','active');
+  log('info', `Query received: "${query}"`);
+  await delay(400);
+  log('info', `Splitting ${KB.length} documents into chunks...`);
+  document.getElementById('sec-chunk').classList.remove('dim');
+  document.getElementById('sec-chunk').classList.add('active');
+  document.getElementById('chunkNote').style.display = '';
+  for(let i=0;i<KB.length;i++){
+    document.getElementById(`chunk-${i}`).classList.add('active');
+    await delay(60);
+  }
+  log('ok', `${KB.length} chunks created ✓`);
+  markStep('chunk','done'); markStep('embed','active');
+
+  // ── STEP 2: Embedding
+  await delay(300);
+  document.getElementById('sec-embed').classList.remove('dim');
+  document.getElementById('sec-embed').classList.add('active');
+  log('info', 'Generating embeddings via embedding model...');
+  showTokenViz(KB[0].text);
+  await delay(500);
+  showVecViz();
+  document.getElementById('embedNote').style.display = '';
+  log('ok', `${KB.length} vectors created (dim=1536 simulated) ✓`);
+  markStep('embed','done'); markStep('vdb','active');
+
+  // ── STEP 3: Vector DB
+  await delay(300);
+  document.getElementById('sec-vdb').classList.remove('dim');
+  document.getElementById('sec-vdb').classList.add('active');
+  log('info', 'Upserting vectors into Vector DB...');
+  await delay(600);
+  drawCanvas([], null);
+  log('ok', `${KB.length} vectors indexed in Vector DB ✓`);
+  markStep('vdb','done'); markStep('search','active');
+
+  // ── STEP 4: Similarity Search
+  await delay(300);
+  document.getElementById('sec-search').classList.remove('dim');
+  document.getElementById('sec-search').classList.add('active');
+  log('info', `Embedding query: "${query}"`);
+  await delay(400);
+  log('info', 'Running cosine similarity search...');
+
+  scores = KB.map((c,i) => ({ i, score: simScore(query, c.text) }));
+  scores.sort((a,b) => b.score - a.score);
+  topIdx = scores.slice(0,3).map(s=>s.i);
+
+  for(let k=0; k<scores.length; k++) {
+    const s = scores[k];
+    const fill = document.getElementById(`bar-${s.i}`);
+    const val  = document.getElementById(`bval-${s.i}`);
+    const pct  = (s.score*100).toFixed(0)+'%';
+    await delay(40);
+    fill.style.width = pct;
+    fill.style.background = topIdx.includes(s.i) ? 'var(--cyan)' : 'var(--blue)';
+    val.textContent = s.score.toFixed(2);
+    val.style.color = topIdx[0]===s.i ? 'var(--cyan)' : topIdx.includes(s.i) ? 'var(--blue)' : 'var(--muted)';
+  }
+
+  // highlight top chunks
+  topIdx.forEach((idx,rank) => {
+    const el = document.getElementById(`chunk-${idx}`);
+    el.className = rank===0 ? 'doc-card top-match' : 'doc-card matched';
+    if(rank===0) el.innerHTML = `<div class="doc-id">${KB[idx].id} <span class="score-pill">TOP MATCH</span></div>${KB[idx].text}`;
+  });
+
+  const queryPos = getQueryPos(query);
+  drawCanvas(topIdx, queryPos);
+  log('ok', `Top-3 chunks retrieved (scores: ${scores.slice(0,3).map(s=>s.score.toFixed(2)).join(', ')}) ✓`);
+  markStep('search','done');
+
+  // ── Phase A
+  await activateLeg('a');
+  markStep('aug','active');
+
+  // ── STEP 5: Augmentation
+  await delay(300);
+  document.getElementById('sec-aug').classList.remove('dim');
+  document.getElementById('sec-aug').classList.add('active');
+  log('info', 'Building augmented prompt with retrieved context...');
+  await delay(500);
+
+  const ctxChunks = topIdx.map((i,rank) => `[Context ${rank+1} — ${KB[i].id}]\n${KB[i].text}`).join('\n\n');
+  const promptText =
+    `[SYSTEM]\nYou are a helpful assistant. Answer the user's question using ONLY the provided context. Be precise and concise.\n\n` +
+    `[CONTEXT]\n${ctxChunks}\n\n` +
+    `[USER QUERY]\n${query}`;
+
+  const pb = document.getElementById('promptBox');
+  pb.innerHTML = typewritePrompt(promptText);
+  document.getElementById('augNote').style.display = '';
+  log('ok', `Prompt augmented with ${topIdx.length} context chunks ✓`);
+  markStep('aug','done');
+
+  // ── Phase G
+  await activateLeg('g');
+  markStep('gen','active');
+
+  // ── STEP 6: Generation
+  await delay(300);
+  document.getElementById('sec-gen').classList.remove('dim');
+  document.getElementById('sec-gen').classList.add('active');
+  log('info', 'Sending augmented prompt to LLM...');
+  await delay(600);
+
+  const answer = getAnswer(query);
+  const ga = document.getElementById('genAnswer');
+  ga.innerHTML = '';
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor-blink';
+  ga.appendChild(cursor);
+
+  let charIdx = 0;
+  const typeInterval = setInterval(() => {
+    if(charIdx < answer.length) {
+      cursor.insertAdjacentText('beforebegin', answer[charIdx]);
+      charIdx++;
+    } else {
+      clearInterval(typeInterval);
+      cursor.remove();
+      document.getElementById('genNote').style.display = '';
+      markStep('gen','done');
+      log('ok', 'Answer generated ✓  — RAG pipeline complete!');
+      btn.disabled = false;
+      btn.textContent = '▶ Run Again';
+      running = false;
+    }
+  }, 18);
+}
+
+/* ─────────────────────────────────────────────────────
+   HELPERS
+───────────────────────────────────────────────────── */
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function resetAll() {
+  // dims all sections
+  ['sec-chunk','sec-embed','sec-vdb','sec-search','sec-aug','sec-gen'].forEach(id => {
+    const el = document.getElementById(id);
+    el.className = el.className.replace(' active','').replace(' done','');
+    el.classList.add('dim');
+  });
+  ['chunkNote','embedNote','augNote','genNote'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('promptBox').innerHTML = '<span style="color:var(--muted)">// waiting for retrieval...</span>';
+  document.getElementById('genAnswer').innerHTML = '<span style="color:var(--muted)">// waiting for pipeline to run...</span>';
+  document.getElementById('tokenViz').innerHTML = '';
+  document.getElementById('vecViz').innerHTML = '';
+  buildChunks();
+  buildSimList();
+  drawCanvas([],null);
+  steps.forEach(s => { const el=document.getElementById(`pt-${s}`); if(el) el.className='pt-dot'; });
+  for(let i=0;i<steps.length-1;i++) { const el=document.getElementById(`ptl-${i}`); if(el) el.className='pt-line'; }
+  ['leg-r','leg-a','leg-g'].forEach(id => document.getElementById(id).classList.remove('on'));
+}
+
+function markStep(s, state) {
+  const el = document.getElementById(`pt-${s}`);
+  if(!el) return;
+  el.className = `pt-dot ${state}`;
+  const idx = steps.indexOf(s);
+  if(state==='done' && idx>0) {
+    const line = document.getElementById(`ptl-${idx-1}`);
+    if(line) line.classList.add('done');
+  }
+}
+
+function activateLeg(phase) {
+  document.getElementById(`leg-${phase}`).classList.add('on');
+  return delay(100);
+}
+
+let logCount = 0;
+function clearLog() { document.getElementById('logBox').innerHTML=''; logCount=0; }
+function log(type, msg) {
+  const box = document.getElementById('logBox');
+  const ts = String(Math.floor(logCount*0.8)).padStart(2,'0')+':'+String((logCount*13)%60).padStart(2,'0');
+  logCount++;
+  const span = document.createElement('span');
+  span.className = 'log-line';
+  span.innerHTML = `<span class="log-ts">${ts}</span> <span class="log-${type}">${type==='ok'?'✓':type==='warn'?'⚠':'›'} ${msg}</span>`;
+  box.appendChild(span);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showTokenViz(text) {
+  const words = text.split(' ').slice(0,12);
+  const el = document.getElementById('tokenViz');
+  el.innerHTML = words.map(w=>`<span class="chunk-token">${w}</span>`).join('');
+  let i=0;
+  const t = setInterval(()=>{
+    const tokens = el.querySelectorAll('.chunk-token');
+    if(i < tokens.length) { tokens[i].classList.add('lit'); i++; }
+    else clearInterval(t);
+  }, 80);
+}
+
+function showVecViz() {
+  const el = document.getElementById('vecViz');
+  const vals = Array.from({length:32}, () => (Math.random()*2-1));
+  const max = Math.max(...vals.map(Math.abs));
+  el.innerHTML = vals.map(v => {
+    const norm = v/max;
+    const intensity = Math.abs(norm);
+    const r = norm > 0 ? Math.round(6*255) : 0;
+    const g = norm > 0 ? Math.round(intensity*182) : Math.round(intensity*130);
+    const b = norm > 0 ? Math.round(intensity*212) : Math.round(intensity*246);
+    const bg = `rgba(${norm>0?'6,182,212':'59,130,246'},${0.15+intensity*0.6})`;
+    const color = intensity > .5 ? '#fff' : 'var(--muted)';
+    return `<div class="vec-cell" style="background:${bg};color:${color}">${v.toFixed(1)}</div>`;
+  }).join('');
+}
+
+function typewritePrompt(text) {
+  const lines = text.split('\n');
+  return lines.map(line => {
+    if(line.startsWith('[SYSTEM]')) return `<span class="prompt-label">SYSTEM</span>\n`;
+    if(line.startsWith('[CONTEXT]')) return `<span class="prompt-label">CONTEXT</span>\n`;
+    if(line.startsWith('[USER')) return `<span class="prompt-label">USER QUERY</span>\n`;
+    if(line.startsWith('[Context')) return `<span class="prompt-context">${line}</span>\n`;
+    if(line.startsWith('You are')) return `<span class="prompt-system">${line}</span>\n`;
+    if(line.trim()==='') return '\n';
+    return `<span class="prompt-query">${line}</span>\n`;
+  }).join('');
+}
+
+function getQueryPos(query) {
+  // Map query to a 2D position based on content
+  const q = query.toLowerCase();
+  if(q.includes('machine learning')||q.includes(' ml')) return [.20,.63];
+  if(q.includes('deep learning')) return [.57,.24];
+  if(q.includes('neural')) return [.53,.31];
+  if(q.includes('vector')||q.includes('embed')) return [.74,.66];
+  if(q.includes('rag')||q.includes('retrieval')) return [.16,.72];
+  return [.40,.50];
+}
+
+/* ─────────────────────────────────────────────────────
+   CANVAS — VECTOR SPACE VIZ
+───────────────────────────────────────────────────── */
+function drawCanvas(highlightIdx, queryPos) {
+  const canvas = document.getElementById('vectorCanvas');
+  const wrap = canvas.parentElement;
+  canvas.width  = wrap.clientWidth  || 600;
+  canvas.height = wrap.clientHeight || 240;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PAD = 36;
+
+  ctx.clearRect(0,0,W,H);
+
+  // grid
+  ctx.strokeStyle='rgba(59,130,246,0.06)'; ctx.lineWidth=1;
+  for(let i=0;i<=5;i++){
+    const x=PAD+(i/5)*(W-PAD*2); const y=PAD+(i/5)*(H-PAD*2);
+    ctx.beginPath();ctx.moveTo(x,PAD);ctx.lineTo(x,H-PAD);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD,y);ctx.lineTo(W-PAD,y);ctx.stroke();
+  }
+
+  // axes labels
+  ctx.fillStyle='rgba(71,85,105,.6)'; ctx.font='10px IBM Plex Mono';
+  ctx.fillText('dim₁',W-PAD-4,H-PAD+14);
+  ctx.fillText('dim₂',PAD-12,PAD-8);
+
+  // connections from query to top matches
+  if(queryPos && highlightIdx.length>0) {
+    highlightIdx.forEach((idx,rank) => {
+      const [ex,ey]=POS[idx];
+      const px=PAD+ex*(W-PAD*2), py=PAD+ey*(H-PAD*2);
+      const qx=PAD+queryPos[0]*(W-PAD*2), qy=PAD+queryPos[1]*(H-PAD*2);
+      ctx.beginPath(); ctx.moveTo(qx,qy); ctx.lineTo(px,py);
+      ctx.setLineDash([4,4]);
+      ctx.strokeStyle=rank===0?'rgba(6,182,212,.5)':'rgba(59,130,246,.25)';
+      ctx.lineWidth=rank===0?2:1;
+      ctx.stroke(); ctx.setLineDash([]);
+    });
+  }
+
+  // chunk dots
+  POS.forEach(([ex,ey],i)=>{
+    const x=PAD+ex*(W-PAD*2), y=PAD+ey*(H-PAD*2);
+    const isTop=highlightIdx[0]===i;
+    const isMatch=highlightIdx.includes(i);
+
+    if(isTop||isMatch){
+      ctx.beginPath(); ctx.arc(x,y,isTop?16:12,0,Math.PI*2);
+      ctx.fillStyle=isTop?'rgba(6,182,212,.1)':'rgba(59,130,246,.08)';
+      ctx.fill();
+    }
+
+    ctx.beginPath(); ctx.arc(x,y,isTop?7:isMatch?6:4,0,Math.PI*2);
+    ctx.fillStyle=isTop?'#06b6d4':isMatch?'#3b82f6':'rgba(59,130,246,.45)';
+    if(isTop) ctx.shadowColor='#06b6d4', ctx.shadowBlur=12;
+    ctx.fill(); ctx.shadowBlur=0;
+
+    ctx.fillStyle='rgba(203,213,225,.6)'; ctx.font='9px IBM Plex Mono';
+    ctx.fillText(KB[i].id,x+9,y+3);
+  });
+
+  // query dot
+  if(queryPos){
+    const qx=PAD+queryPos[0]*(W-PAD*2), qy=PAD+queryPos[1]*(H-PAD*2);
+    ctx.beginPath(); ctx.arc(qx,qy,18,0,Math.PI*2);
+    ctx.fillStyle='rgba(245,158,11,.1)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(qx,qy,9,0,Math.PI*2);
+    ctx.fillStyle='#f59e0b';
+    ctx.shadowColor='#f59e0b'; ctx.shadowBlur=16;
+    ctx.fill(); ctx.shadowBlur=0;
+    ctx.fillStyle='#f59e0b'; ctx.font='bold 9px IBM Plex Mono';
+    ctx.fillText('QUERY',qx+12,qy+3);
+  }
+}
+
+window.addEventListener('resize', () => {
+  const qp = scores.length ? getQueryPos(document.getElementById('queryInput').value) : null;
+  drawCanvas(topIdx, qp);
+});
+</script>
+</body>
+</html>
